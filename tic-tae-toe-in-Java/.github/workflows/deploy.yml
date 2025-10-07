@@ -1,0 +1,46 @@
+name: Dynamic SCP Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    name: Deploy based on commit message
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout
+
+      - name: Extract deploy target from commit message
+        id: parse
+        shell: bash
+        run: |
+          COMMIT_MSG="$(git log -1 --pretty=%B)"
+          echo "Commit message: $COMMIT_MSG"
+
+          # Extract folder name or path after "deploy:"
+          TARGET=$(echo "$COMMIT_MSG" | sed -n 's/.*deploy:\s*\([^ ]*\).*/\1/p')
+
+          if [ -z "$TARGET" ]; then
+            echo "No deploy target specified, using default folder."
+            TARGET="default"
+          fi
+
+          echo "Target folder resolved to: $TARGET"
+          echo "target_path=$TARGET" >> $GITHUB_OUTPUT
+
+      - name: Show resolved target path
+        run: echo "Deploying to ${{ steps.parse.outputs.target_path }}"
+
+      - name: Deploy via SCP
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: best-linux@cs.wisc.edu
+          username: albertw
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          source: "./private/cs354/activities"
+          target: ${{ steps.parse.outputs.target_path }}
+          overwrite: true
